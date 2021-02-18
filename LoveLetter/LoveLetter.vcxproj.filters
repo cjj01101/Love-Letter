@@ -24,37 +24,43 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="LvlGameInit.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="LvlGameMain.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="LvlInterObject.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="LvlGamePlayer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="LvlGameCtrl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="LoveLetter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="LvlSystemRoom.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <QtMoc Include="LvlGameMain.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
     <QtMoc Include="LvlInterObject.h">
       <Filter>Header Files</Filter>
     </QtMoc>
     <QtMoc Include="LvlGamePlayer.h">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <QtMoc Include="LvlGameCtrl.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+    <QtMoc Include="LvlSystemRoom.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
   </ItemGroup>
   <ItemGroup>
-    <QtRcc Include="LvlGameMain.qrc">
+    <QtRcc Include="LoveLetter.qrc">
       <Filter>Resource Files</Filter>
     </QtRcc>
   </ItemGroup>
   <ItemGroup>
-    <QtUic Include="LvlGameMain.ui">
+    <QtUic Include="LoveLetter.ui">
       <Filter>Resource Files</Filter>
     </QtUic>
   </ItemGroup>

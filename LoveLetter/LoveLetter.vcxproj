@@ -68,7 +68,7 @@
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
@@ -88,17 +88,21 @@
   <ItemGroup>
     <ClCompile Include="LvlGamePlayer.cpp" />
     <ClCompile Include="LvlInterObject.cpp" />
-    <QtRcc Include="LvlGameMain.qrc" />
-    <QtUic Include="LvlGameMain.ui" />
-    <QtMoc Include="LvlGameMain.h" />
-    <ClCompile Include="LvlGameMain.cpp" />
-    <ClCompile Include="LvlGameInit.cpp" />
+    <ClCompile Include="LvlSystemRoom.cpp" />
+    <QtRcc Include="LoveLetter.qrc" />
+    <QtUic Include="LoveLetter.ui" />
+    <QtMoc Include="LvlGameCtrl.h" />
+    <ClCompile Include="LvlGameCtrl.cpp" />
+    <ClCompile Include="LoveLetter.cpp" />
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="LvlInterObject.h" />
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="LvlGamePlayer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <QtMoc Include="LvlSystemRoom.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">

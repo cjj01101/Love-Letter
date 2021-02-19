@@ -8,10 +8,10 @@
 
 #include "LvlInterObject.h"
 
-const QString LVL_InterCard::m_aqstrCardNames[CardTypeNum] =
+const QString LVL_InterCard::m_aqstrCardNames[(int)LVL_InterCardType_E::CardTypeNum] =
                             { "none", "guard", "priest", "baron", "handmaid", "prince", "king", "countess", "princess" };
 
-const QString LVL_InterCard::m_aqstrCardHints[CardTypeNum] = { "",
+const QString LVL_InterCard::m_aqstrCardHints[(int)LVL_InterCardType_E::CardTypeNum] = { "",
                               QStringLiteral("守卫（1）\n[弃置、选择]选择一名玩家，并说出一张不是守卫的卡牌。若对方持有该卡牌，则对方出局。\n不能选择出局或受保护的玩家。\n当没有可选择的玩家时，效果不会发生。"),
                               QStringLiteral("牧师（2）\n[弃置、选择]选择一名玩家，查看其手牌。只需要给你看。\n不能选择出局或受保护的玩家。\n当没有可选择的玩家时，效果不会发生。"),
                               QStringLiteral("男爵（3）\n[弃置、选择]选择一名玩家，你们比拼手牌点数，点数较小的一方出局；若点数相同则无事发生。\n比拼点数时双方交换手牌检视。\n不能选择出局或受保护的玩家。\n当没有可选择的玩家时，效果不会发生。"),
@@ -21,7 +21,7 @@ const QString LVL_InterCard::m_aqstrCardHints[CardTypeNum] = { "",
                               QStringLiteral("女伯爵（7）\n[被动]当你手上另外还有王子（5）或国王（6）时，你只能打出女伯爵。"),
                               QStringLiteral("公主（8）\n[被动]当你因任何原因弃置这张牌时，你将直接出局。") };
 
-const bool LVL_InterCard::m_abNeedTarget[CardTypeNum] =
+const bool LVL_InterCard::m_abNeedTarget[(int)LVL_InterCardType_E::CardTypeNum] =
                           { false, true, true, true, false, true, true, false, false };
 
 /*
@@ -34,7 +34,7 @@ LVL_InterCard::LVL_InterCard(QWidget *parent, LVL_InterCardType_E enType, bool b
     setGeometry(QRect(qpPos, qsSize));//大小位置
     setGraphicsEffect(&qgoeOpacity);
     qgoeOpacity.setOpacity(1);//不透明度
-    if(true == bKnown) setToolTip(m_aqstrCardHints[enType]);//若可见，增加鼠标提示
+    if(true == bKnown) setToolTip(m_aqstrCardHints[(int)enType]);//若可见，增加鼠标提示
 }
 
 /*
@@ -45,9 +45,9 @@ LVL_InterCard::LVL_InterCard(QWidget *parent, LVL_InterCardType_E enType, bool b
 */
 void LVL_InterCard::LVL_InterSetCardType(LVL_InterCardType_E enType) {
     this->enType = enType;
-    setToolTip(m_aqstrCardHints[bKnown ? enType : 0]);
-    if (bKnown || enType == none) {
-        QString qstrPicName(LVL_PIC_DIR + m_aqstrCardNames[enType]);
+    setToolTip(m_aqstrCardHints[bKnown ? (int)enType : 0]);
+    if (bKnown || enType == LVL_InterCardType_E::none) {
+        QString qstrPicName(LVL_PIC_DIR + m_aqstrCardNames[(int)enType]);
         setStyleSheet(QString("QLabel{border-image:url(%1);}""QLabel:hover{border-image:url(%2);}").arg(qstrPicName).arg(qstrPicName + LVL_PIC_FOCUSED));
     }
     else setStyleSheet(QString("QLabel{border-image:url(%1);}""QLabel:hover{border-image:url(%1);}").arg(LVL_PIC_CARD_BACK));
@@ -61,9 +61,9 @@ void LVL_InterCard::LVL_InterSetCardType(LVL_InterCardType_E enType) {
 */
 void LVL_InterCard::LVL_InterSetCardKnown(bool bKnown) {
     this->bKnown = bKnown;
-    setToolTip(m_aqstrCardHints[bKnown ? enType : 0]);
+    setToolTip(m_aqstrCardHints[bKnown ? (int)enType : 0]);
     if (bKnown) {
-        QString qstrPicName(LVL_PIC_DIR + m_aqstrCardNames[enType]);
+        QString qstrPicName(LVL_PIC_DIR + m_aqstrCardNames[(int)enType]);
         setStyleSheet(QString("QLabel{border-image:url(%1);}""QLabel:hover{border-image:url(%2);}").arg(qstrPicName).arg(qstrPicName + LVL_PIC_FOCUSED));
     }
     else setStyleSheet(QString("QLabel{border-image:url(%1);}""QLabel:hover{border-image:url(%1);}").arg(LVL_PIC_CARD_BACK));
@@ -128,8 +128,8 @@ LVL_InterBtn::LVL_InterBtn(QWidget *parent, const QString &text, const QRect &qr
 */
 LVL_InterBtn::LVL_InterBtn(const LVL_InterCard &stCard) : QPushButton(qobject_cast<QWidget*>(stCard.parent())) {
     setGeometry(stCard.geometry());
-    setToolTip(LVL_InterCard::m_aqstrCardHints[stCard.LVL_InterGetCardType()]);
-    QString qstrPicName(LVL_PIC_DIR + LVL_InterCard::m_aqstrCardNames[stCard.LVL_InterGetCardType()]);
+    setToolTip(LVL_InterCard::m_aqstrCardHints[(int)(stCard.LVL_InterGetCardType())]);
+    QString qstrPicName(LVL_PIC_DIR + LVL_InterCard::m_aqstrCardNames[(int)(stCard.LVL_InterGetCardType())]);
     setStyleSheet(QString("QPushButton{border-image:url(%1);}"
         "QPushButton:hover{border-image:url(%2);}"
         "QPushButton:checked{border-image:url(%3);}")

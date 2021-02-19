@@ -16,14 +16,27 @@ int LVL_GamePlayer::sActivePlayerNum = 0;//初始在场玩家数为0
     参数：parent-玩家所属窗口的指针；bKnown-玩家卡牌是否可见；qpSlot-卡槽左上角坐标；qpDiscard-弃牌堆左上角坐标；sCard{Width, Height}-卡牌大小；sCardSpace-两张卡牌的间隔
 */
 LVL_GamePlayer::LVL_GamePlayer(LVL_GameCtrller *parent, bool bKnown, const QPoint &qpSlot, const QPoint &qpDiscard, const QSize &qsCardSize, int sCardSpace)
-    : QWidget(parent), enState(Normal), bIsOwnRound(false), sDiscardPileSize(0), sDiscardPilePoint(0), qpDiscardPilePos(qpDiscard)
-    , pstOldCard(new LVL_InterCard(parent, LVL_InterCard::none, bKnown, qpSlot, qsCardSize))
-    , pstNewCard(new LVL_InterCard(parent, LVL_InterCard::none, bKnown, qpSlot + QPoint(qsCardSize.width() + sCardSpace, 0), qsCardSize))
+    : QWidget(parent), pstCtrller(parent), enState(LVL_GamePlayerState_E::Normal), bIsOwnRound(false), sDiscardPileSize(0), sDiscardPilePoint(0), qpDiscardPilePos(qpDiscard)
+    , pstOldCard(new LVL_InterCard(parent, LVL_InterCardType_E::none, bKnown, qpSlot, qsCardSize))
+    , pstNewCard(new LVL_InterCard(parent, LVL_InterCardType_E::none, bKnown, qpSlot + QPoint(qsCardSize.width() + sCardSpace, 0), qsCardSize))
     , pstSelect(NULL), pstTarget(NULL), pstPortrait(new LVL_InterBtn(parent))
 {
     sActivePlayerNum++;//在场玩家数加一
     setGeometry(0, 0, 0, 0);
-    connect(pstPortrait, &QPushButton::clicked, [this] { if (Normal == enState) emit sgnPortraitClicked(); });//头像点击
+    connect(pstPortrait, &QPushButton::clicked, [this] { if (LVL_GamePlayerState_E::Normal == enState) emit sgnPortraitClicked(); });//头像点击操作
+}
+
+/*
+     功能：使玩家出局
+     参数：无
+     返回值：无
+*/
+void LVL_GamePlayer::LVL_GameKickPlayer() {
+    pstPortrait->LVL_InterSetBtnPic(qstrPortraitName + LVL_PIC_OUT, qstrPortraitName + LVL_PIC_OUT, qstrPortraitName + LVL_PIC_OUT);//更改头图
+    enState = LVL_GamePlayerState_E::Out;//设置状态为出局
+    pstOldCard->LVL_InterSetCardKnown(true);//展示手牌
+    pstCtrller->LVL_GameAddDiscardEntry(this, pstOldCard->LVL_InterGetCardType());
+    sActivePlayerNum--;//在场玩家数减一
 }
 
 /*
@@ -34,12 +47,15 @@ LVL_GamePlayer::LVL_GamePlayer(LVL_GameCtrller *parent, bool bKnown, const QPoin
 */
 void LVL_GamePlayer::LVL_GameMakeDiscard(LVL_InterCard *pstCard) {
     if (NULL == pstCard) exit(-1);
+    LVL_InterCardType_E enType = pstCard->LVL_InterGetCardType();
     QSize qsDisCardSize = { (int)(pstCard->width() * LVL_GAME_DISCARD_SCALE), (int)(pstCard->height() * LVL_GAME_DISCARD_SCALE) };
-    LVL_InterCard *pstDiscard = new LVL_InterCard(qobject_cast<QWidget*>(parent()), pstCard->LVL_InterGetCardType(), true,
+    LVL_InterCard *pstDiscard = new LVL_InterCard(parentWidget(), enType, true,
         qpDiscardPilePos + QPoint(sDiscardPileSize * (qsDisCardSize.width() / 4.0), 0), qsDisCardSize);
-    pstDiscard->show();//弃牌堆中显示弃牌
-    sDiscardPileSize++;//弃牌堆大小加一
-    sDiscardPilePoint += pstCard->LVL_InterGetCardType();//弃牌总点数增加
+    pstDiscard->show();
+    pstCtrller->LVL_GameAddDiscardEntry(this, enType);
+
+    sDiscardPileSize++;
+    sDiscardPilePoint += (int)enType;
 }
 
 /*
@@ -51,7 +67,7 @@ void LVL_GamePlayer::LVL_GameMakeDiscard(LVL_InterCard *pstCard) {
 void LVL_GamePlayer::LVL_GamePlayCard() {
     if (NULL == pstSelect) return;
     
-    LVL_InterCard::LVL_InterCardType_E enType = pstSelect->LVL_InterGetCardType();
+    LVL_InterCardType_E enType = pstSelect->LVL_InterGetCardType();
     pstSelect->LVL_InterWithdrawCard();//收回卡牌
     QPoint qpOrigin = pstOldCard->pos();
 
@@ -60,9 +76,9 @@ void LVL_GamePlayer::LVL_GamePlayCard() {
         pstOldCard->LVL_InterSetCardType(pstNewCard->LVL_InterGetCardType());
         pstOldCard->LVL_InterSetCardPos(pstNewCard->pos());
     }
-    pstNewCard->LVL_InterSetCardType(LVL_InterCard::none);//将被出的卡牌置none
+    pstNewCard->LVL_InterSetCardType(LVL_InterCardType_E::none);//将被出的卡牌置none
 
-    dynamic_cast<LVL_GameCtrller*>(parent())->LVL_GameTriggerEffect(enType, this, pstTarget);//发动卡牌效果
+    pstCtrller->LVL_GameTriggerEffect(enType, this, pstTarget);//发动卡牌效果
     emit sgnUntarget(pstTarget);//重置头图
     pstTarget = NULL;//取消目标选择
 
@@ -82,10 +98,10 @@ void LVL_GamePlayer::LVL_GamePlayCard() {
     返回值：无
 */
 void LVL_GamePlayer::LVL_GameStartRound() {
-    if (Out == enState) return emit sgnRoundEnded();
+    if (LVL_GamePlayerState_E::Out == enState) return emit sgnRoundEnded();
     emit sgnWantDeal(pstNewCard);
-    if (LVL_InterCard::none == pstNewCard->LVL_InterGetCardType()) return emit sgnRoundEnded();//没有得到发牌，结束回合
-    if (Guarded == enState) LVL_GameUnguardPlayer();//若上一回合被保护，则取消保护
+    if (LVL_InterCardType_E::none == pstNewCard->LVL_InterGetCardType()) return emit sgnRoundEnded();//没有得到发牌，结束回合
+    if (LVL_GamePlayerState_E::Guarded == enState) LVL_GameUnguardPlayer();//若上一回合被保护，则取消保护
     bIsOwnRound = true;
     emit sgnRoundStarted();
 }
@@ -139,10 +155,10 @@ void LVL_GameHuman::LVL_GameClickCard() {
     if (false == bIsOwnRound) return;//未到自己回合不能选牌
     
     //判定女伯爵技能
-    LVL_InterCard* pstSender = dynamic_cast<LVL_InterCard*>(sender());
-    if (LVL_InterCard::prince == pstSender->LVL_InterGetCardType() || LVL_InterCard::king == pstSender->LVL_InterGetCardType()) {//选择的牌是王子或国王
+    LVL_InterCard* pstSender = qobject_cast<LVL_InterCard*>(sender());
+    if (LVL_InterCardType_E::prince == pstSender->LVL_InterGetCardType() || LVL_InterCardType_E::king == pstSender->LVL_InterGetCardType()) {//选择的牌是王子或国王
         LVL_InterCard* pstOther = (pstNewCard == pstSender) ? pstOldCard : pstNewCard;
-        if (LVL_InterCard::countess == pstOther->LVL_InterGetCardType()) {//且另一张卡是女伯爵
+        if (LVL_InterCardType_E::countess == pstOther->LVL_InterGetCardType()) {//且另一张卡是女伯爵
             QMessageBox::information(NULL, QStringLiteral("操作无效"), QStringLiteral("当你手上有王子或国王时，你只能打出女伯爵。"));
             return;
         }
@@ -160,7 +176,7 @@ void LVL_GameHuman::LVL_GameClickCard() {
     } else {
         pstSender->LVL_InterPopCard();
         pstSelect = pstSender;
-        if (NULL == dynamic_cast<LVL_GameCtrller*>(parent())->LVL_GameGetTarget(pstSelect->LVL_InterGetCardType(), this)) emit sgnTarget(NULL);//打出的卡牌没有可选目标或无需选择目标时，跳过选择目标阶段
+        if (0 == pstCtrller->LVL_GameGetTargets(pstSelect->LVL_InterGetCardType(), this).length()) emit sgnTarget(NULL);//打出的卡牌没有可选目标或无需选择目标时，跳过选择目标阶段
     }
 }
 
@@ -170,10 +186,10 @@ void LVL_GameHuman::LVL_GameClickCard() {
     返回值：无
 */
 void LVL_GameHuman::LVL_GameClickPortrait() {
-    if (false == bIsOwnRound || NULL == pstSelect || false == LVL_InterCard::m_abNeedTarget[pstSelect->LVL_InterGetCardType()]) return;//未到自己回合、未选牌或出牌无需目标时不能选择对象
+    if (false == bIsOwnRound || NULL == pstSelect || false == LVL_InterCard::m_abNeedTarget[(int)(pstSelect->LVL_InterGetCardType())]) return;//未到自己回合、未选牌或出牌无需目标时不能选择对象
     
     LVL_GamePlayer* pstSender = dynamic_cast<LVL_GamePlayer*>(sender());//获取点选的目标
-    if (this == pstSender && LVL_InterCard::prince != pstSelect->LVL_InterGetCardType()) return;//除王子外不能选择自己作为目标
+    if (this == pstSender && LVL_InterCardType_E::prince != pstSelect->LVL_InterGetCardType()) return;//除王子外不能选择自己作为目标
     if (NULL != pstTarget) emit sgnUntarget(pstTarget);//已选目标时，取消先前选择的目标
     if (pstSender == pstTarget) pstTarget = NULL;//如果点击的是先前已经选择的目标，则将选择目标置空
     else { pstTarget = pstSender; emit sgnTarget(pstSender);}//否则选择点击的目标
@@ -198,15 +214,24 @@ LVL_GameAI::LVL_GameAI(LVL_GameCtrller *parent, const QPoint &qpSlot, const QPoi
 }
 
 void LVL_GameAI::LVL_GameAIGetReady() {
-    LVL_InterCard::LVL_InterCardType_E enOld = pstOldCard->LVL_InterGetCardType(), enNew = pstNewCard->LVL_InterGetCardType();
-    if (LVL_InterCard::princess == enNew//避免出公主牌
-        || LVL_InterCard::countess == enOld && (LVL_InterCard::prince == enNew || LVL_InterCard::king == enNew)) pstSelect = pstOldCard;//判定女伯爵效果
-    else if (LVL_InterCard::princess == enOld//避免出公主牌
-        || LVL_InterCard::countess == enNew && (LVL_InterCard::prince == enOld || LVL_InterCard::king == enOld)) pstSelect = pstNewCard;//判定女伯爵效果
+    const LVL_GameRecord &stRecord = pstCtrller->LVL_GameGetRecord();
+
+    //选择手牌
+    LVL_InterCardType_E enOld = pstOldCard->LVL_InterGetCardType(), enNew = pstNewCard->LVL_InterGetCardType(), enSelect;
+    if (LVL_InterCardType_E::princess == enNew//避免出公主牌
+        || LVL_InterCardType_E::countess == enOld && (LVL_InterCardType_E::prince == enNew || LVL_InterCardType_E::king == enNew)) pstSelect = pstOldCard;//判定女伯爵效果
+    else if (LVL_InterCardType_E::princess == enOld//避免出公主牌
+        || LVL_InterCardType_E::countess == enNew && (LVL_InterCardType_E::prince == enOld || LVL_InterCardType_E::king == enOld)) pstSelect = pstNewCard;//判定女伯爵效果
     else pstSelect = (qrand() % HandCardNum) ? pstNewCard : pstOldCard;//若不生效，则随意选择卡牌
+    
     pstSelect->LVL_InterPopCard();//弹出卡牌
     pstSelect->LVL_InterSetCardKnown(true);//使卡牌可视化
-    pstTarget = dynamic_cast<LVL_GameCtrller*>(parent())->LVL_GameGetTarget(pstSelect->LVL_InterGetCardType(), this);//选择目标
+    enSelect = pstSelect->LVL_InterGetCardType();
+
+    //选择目标
+    QList<LVL_GamePlayer*> qlistTargets = pstCtrller->LVL_GameGetTargets(enSelect, this);
+    if (LVL_InterCardType_E::prince == enSelect && qlistTargets.length() > 1) qlistTargets.removeAll(this);//如有可能，出王子牌时不选自己
+    if (qlistTargets.length() > 0) pstTarget = qlistTargets.at(qrand() % qlistTargets.length());
     emit sgnTarget(pstTarget);//标记目标
     emit sgnFinish();//AI选择阶段结束
 }

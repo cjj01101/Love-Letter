@@ -24,6 +24,7 @@
 #define LVL_GAME_AI_WAITING_MSEC        (1500) //AI反应时间
 #define LVL_GAME_MOVING_MSEC            (500)  //移动卡牌动画时间
 #define LVL_GAME_FLIPPING_MSEC          (400)  //翻牌动画时间
+#define LVL_GAME_THROWING_MSEC          (1000) //被动弃牌动画时间
 #define LVL_GAME_WATCHING_MSEC          (2000) //翻牌后查看时间
 
 #define LVL_GAME_WINDOW_WIDTH           (1200) //窗口宽度
@@ -134,10 +135,10 @@ public:
     LVL_GameGuesser(QWidget *parent = Q_NULLPTR, const QPoint &qpPos = { 0, 0 }, const QSize &qsSize = { LVL_GAME_GUESSER_WIDTH, LVL_GAME_GUESSER_HEIGHT });//构造函数
 
 private:
-    LVL_InterCard::LVL_InterCardType_E enGuess;//将要猜的牌点数
+    LVL_InterCardType_E enGuess;//将要猜的牌点数
 
 signals:
-    void sgnGuessFinished(LVL_InterCard::LVL_InterCardType_E);//表示猜牌结束
+    void sgnGuessFinished(LVL_InterCardType_E);//表示猜牌结束
 };
 
 ////////////////////////////////////////////////////////////
@@ -148,15 +149,23 @@ class LVL_GameDeckManager : public QWidget {
     Q_OBJECT
 
 public:
-    const static LVL_InterCard::LVL_InterCardType_E m_aenCardSet[LVL_GAME_TOTAL_CARD_NUM];//牌组中所有卡牌
+    const static QList<LVL_InterCardType_E> m_qlistCardSet;//牌组所有卡牌
 
     LVL_GameDeckManager(QWidget *parent = Q_NULLPTR);//构造函数
     int LVL_GameMakeDeal(LVL_GamePlayer *pstPlayer, LVL_InterCard *pstCard, bool bDealUnseen);//进行发牌操作
 
 protected:
-    LVL_InterCard::LVL_InterCardType_E aenDrawPile[LVL_GAME_TOTAL_CARD_NUM];//发牌堆
+    QList<LVL_InterCardType_E> qlistDrawPile;//抽牌堆
     QLabel *pqlRest;//显示剩余牌数的文字
-    int sCurCard;//下一轮要发的牌
+};
+
+////////////////////////////////////////////////////////////
+//                       场上记录                         //
+////////////////////////////////////////////////////////////
+
+typedef QPair<LVL_GamePlayer*, LVL_InterCardType_E> LVL_GameDiscardRecord;
+struct LVL_GameRecord{
+    QList<LVL_GameDiscardRecord> qlistDiscardEntries;
 };
 
 ////////////////////////////////////////////////////////////
@@ -169,8 +178,10 @@ class LVL_GameCtrller : public QWidget {
 public:
     LVL_GameCtrller(QWidget *parent = Q_NULLPTR);//构造函数
 
-    LVL_GamePlayer *LVL_GameGetTarget(LVL_InterCard::LVL_InterCardType_E enSelect, LVL_GamePlayer *pstSelf);//为卡牌获取一个随机目标
-    void LVL_GameTriggerEffect(LVL_InterCard::LVL_InterCardType_E enType, LVL_GamePlayer* pstSelf, LVL_GamePlayer *pstTarget);//发动卡牌技能
+    QList<LVL_GamePlayer*> LVL_GameGetTargets(LVL_InterCardType_E enSelect, LVL_GamePlayer *pstSelf);//获取所有可能的目标
+    void LVL_GameTriggerEffect(LVL_InterCardType_E enType, LVL_GamePlayer* pstSelf, LVL_GamePlayer *pstTarget);//发动卡牌技能
+    void LVL_GameAddDiscardEntry(LVL_GamePlayer* pstPlayer, LVL_InterCardType_E enType) { stRecord.qlistDiscardEntries.append(LVL_GameDiscardRecord(pstPlayer, enType)); } //添加记录
+    const LVL_GameRecord &LVL_GameGetRecord() const { return stRecord; }
 
 protected:
     void closeEvent(QCloseEvent *event);
@@ -179,10 +190,12 @@ private:
     LVL_GamePlayer *apstPlayers[LVL_GAME_MAXIMUM_PLAYER_NUM];//玩家
     LVL_GameGuesser *pstGuesser;//猜牌器
     LVL_GameDeckManager *pstDeckManager;//牌堆管理器
+    LVL_GameRecord stRecord;
     bool bIsProcessing;//是否在执行卡牌效果
 
 private slots:
     void LVL_GameCalculatePoint();//游戏结束时进行结算
+    
 
 signals:
     void sgnNoProcessing();//信号函数，卡牌效果执行完毕

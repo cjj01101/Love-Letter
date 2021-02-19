@@ -16,8 +16,6 @@
 */
 LVL_GameCtrller::LVL_GameCtrller(QWidget *parent) : QWidget(parent), bIsProcessing(false)
 {
-    setGeometry(0, 0, LVL_GAME_WINDOW_WIDTH, LVL_GAME_WINDOW_HEIGHT);
-
     //初始化牌堆和猜牌器
     pstDeckManager = new LVL_GameDeckManager(this);
     pstGuesser = new LVL_GameGuesser(this, LVL_GAME_GUESSER_POS);
@@ -45,21 +43,22 @@ LVL_GameCtrller::LVL_GameCtrller(QWidget *parent) : QWidget(parent), bIsProcessi
     //状态转移和信号连接
     for (int i = 0; i < LVL_GAME_MAXIMUM_PLAYER_NUM; i++) {
         apqsPlayers[i]->addTransition(apstPlayers[i], &LVL_GamePlayer::sgnRoundEnded, apqsPlayers[(i + 1) % LVL_GAME_MAXIMUM_PLAYER_NUM]);//玩家回合转移
+
         connect(apqsPlayers[i], &QState::entered, apstPlayers[i], &LVL_GamePlayer::LVL_GameStartRound);//玩家回合开始信号
         connect(apstPlayers[i], &LVL_GamePlayer::sgnWantDeal, [=](LVL_InterCard* pstCard) {//玩家需要发牌信号
             if (1 == LVL_GamePlayer::sActivePlayerNum) pqsmGameCtrl->stop();
-            else if (0 == pstDeckManager->LVL_GameMakeDeal(apstPlayers[i], pstCard, false)) pqsmGameCtrl->stop();
+            else if (-1 == pstDeckManager->LVL_GameMakeDeal(apstPlayers[i], pstCard, false)) pqsmGameCtrl->stop();
         });
         connect(apstPlayers[i], &LVL_GamePlayer::sgnTarget, [this](LVL_GamePlayer *pstTarget) {//玩家被选择信号
             if (NULL != pstTarget) pstTarget->LVL_GameSetPortraitPic(pstTarget->qstrPortraitName + LVL_PIC_TARGETED,
                 pstTarget->qstrPortraitName + LVL_PIC_FOCUSED, pstTarget->qstrPortraitName + LVL_PIC_FOCUSED);
         });
         connect(apstPlayers[i], &LVL_GamePlayer::sgnUntarget, [this](LVL_GamePlayer *pstTarget) {//玩家被取消选择信号
-            if (NULL != pstTarget && LVL_GamePlayer::Normal == pstTarget->LVL_GameGetPlayerState()) pstTarget->LVL_GameSetDefaultPortraitPic();
+            if (NULL != pstTarget && LVL_GamePlayerState_E::Normal == pstTarget->LVL_GameGetPlayerState()) pstTarget->LVL_GameSetDefaultPortraitPic();
         });
         connect(apstPlayers[i], &LVL_GamePlayer::sgnPortraitClicked, qobject_cast<LVL_GameHuman*>(apstPlayers[0]), &LVL_GameHuman::LVL_GameClickPortrait);//玩家头像点击信号
 
-        //判定游戏人数，将不需要的玩家踢出局并隐藏，需要的玩家则各发一张牌
+        //判定游戏人数，将不需要的玩家踢出局并隐藏
         int sPlayerNum = stSettings.LVL_GameReadSetting<int>("Player Number");
         if ((2 == sPlayerNum && (1 == i || 3 == i)) || (3 == sPlayerNum && 2 == i)) {
             apstPlayers[i]->LVL_GameKickPlayer();
@@ -75,21 +74,19 @@ LVL_GameCtrller::LVL_GameCtrller(QWidget *parent) : QWidget(parent), bIsProcessi
 }
 
 /*
-    功能：随机提供一个可以作为卡牌技能对象的目标
+    功能：提供所有可以作为卡牌技能对象的目标
     参数：enSelect-要出的手牌；pstSelf-卡牌持有者的指针
-    返回值：LVL_GamePlayer*-目标玩家的指针，如果没有玩家可以作为目标或不需要目标，则返回NULL
+    返回值：QList<LVL_GamePlayer*>-所有目标玩家的指针的列表
 */
-LVL_GamePlayer *LVL_GameCtrller::LVL_GameGetTarget(LVL_InterCard::LVL_InterCardType_E enSelect, LVL_GamePlayer *pstSelf) {
+QList<LVL_GamePlayer*> LVL_GameCtrller::LVL_GameGetTargets(LVL_InterCardType_E enSelect, LVL_GamePlayer *pstSelf) {
     if (NULL == pstSelf) exit(-1);
-    if (false == LVL_InterCard::m_abNeedTarget[enSelect]) return NULL;
+    if (false == LVL_InterCard::m_abNeedTarget[(int)enSelect]) return QList<LVL_GamePlayer*>();
 
-    LVL_GamePlayer *apstActivePlayer[LVL_GAME_MAXIMUM_PLAYER_NUM];
-    int32_t sSize = 0;
+    QList<LVL_GamePlayer*> qlistTargets;
     for (int i = 0; i < sizeof(apstPlayers)/sizeof(apstPlayers[0]); i++)
-        if ((LVL_InterCard::prince == enSelect || pstSelf != apstPlayers[i]) && LVL_GamePlayer::Normal == apstPlayers[i]->LVL_GameGetPlayerState())//除王子外，不能选择自己作为目标
-            apstActivePlayer[sSize++] = apstPlayers[i];
-    if (sSize == 0) return NULL;
-    return apstActivePlayer[qrand() % sSize];
+        if ((LVL_InterCardType_E::prince == enSelect || pstSelf != apstPlayers[i]) && LVL_GamePlayerState_E::Normal == apstPlayers[i]->LVL_GameGetPlayerState())//除王子外，不能选择自己作为目标
+            qlistTargets.append(apstPlayers[i]);
+    return qlistTargets;
 }
 
 /*
@@ -97,9 +94,9 @@ LVL_GamePlayer *LVL_GameCtrller::LVL_GameGetTarget(LVL_InterCard::LVL_InterCardT
     参数：enType-要出的卡牌种类；pstSelf-卡牌持有者的指针；pstTarget-卡牌作用对象的指针
     返回值：无
 */
-void LVL_GameCtrller::LVL_GameTriggerEffect(LVL_InterCard::LVL_InterCardType_E enType, LVL_GamePlayer *pstSelf, LVL_GamePlayer *pstTarget) {
+void LVL_GameCtrller::LVL_GameTriggerEffect(LVL_InterCardType_E enType, LVL_GamePlayer *pstSelf, LVL_GamePlayer *pstTarget) {
     if (NULL == pstSelf) exit(-1);
-    if (true == LVL_InterCard::m_abNeedTarget[enType] && NULL == pstTarget) return;//如果没有可行的目标，就不执行卡牌效果
+    if (true == LVL_InterCard::m_abNeedTarget[(int)enType] && NULL == pstTarget) return;//如果没有可行的目标，就不执行卡牌效果
     
     QEventLoop qelLoop;
     LVL_GamePlayer *pstShow = NULL;
@@ -108,18 +105,23 @@ void LVL_GameCtrller::LVL_GameTriggerEffect(LVL_InterCard::LVL_InterCardType_E e
     switch (enType) {
 
         //守卫
-    case LVL_InterCard::guard: {
-        LVL_InterCard::LVL_InterCardType_E enGuess;
+    case LVL_InterCardType_E::guard: {
+        LVL_InterCardType_E enGuess;
         if (qobject_cast<LVL_GameHuman*>(pstSelf)) {
             pstGuesser->raise();  pstGuesser->show();
-            connect(pstGuesser, &LVL_GameGuesser::sgnGuessFinished, [&](LVL_InterCard::LVL_InterCardType_E enReceive) {
+            connect(pstGuesser, &LVL_GameGuesser::sgnGuessFinished, [&](LVL_InterCardType_E enReceive) {
                 pstGuesser->hide();
                 enGuess = enReceive;
                 qelLoop.quit();
             });
             qelLoop.exec();
+        } else {
+            QList<LVL_InterCardType_E> qlistLeftCards = pstDeckManager->m_qlistCardSet;
+            qlistLeftCards.removeAll(LVL_InterCardType_E::guard);
+            for (LVL_GameDiscardRecord stRecord : stRecord.qlistDiscardEntries) qlistLeftCards.removeOne(stRecord.second);
+            enGuess = qlistLeftCards[(qrand() % qlistLeftCards.length())];
         }
-        else enGuess = (LVL_InterCard::LVL_InterCardType_E)(qrand() % 7 + 2);
+
         LVL_InterCard *pstGuess = new LVL_InterCard(this, enGuess, true,
             QPoint((LVL_GAME_WINDOW_WIDTH - LVL_INTER_CARD_WIDTH) / 2, (LVL_GAME_WINDOW_HEIGHT - LVL_INTER_CARD_HEIGHT) / 2));
         pstGuess->show();
@@ -131,7 +133,7 @@ void LVL_GameCtrller::LVL_GameTriggerEffect(LVL_InterCard::LVL_InterCardType_E e
     }
 
         //牧师
-    case LVL_InterCard::priest: {
+    case LVL_InterCardType_E::priest: {
         if (qobject_cast<LVL_GameHuman*>(pstSelf)) {
             QSequentialAnimationGroup* pqsagWatching = new QSequentialAnimationGroup(this);
             pqsagWatching->addAnimation(pstTarget->pstOldCard->LVL_InterCreateFilppingAnimation(LVL_GAME_FLIPPING_MSEC));
@@ -145,7 +147,7 @@ void LVL_GameCtrller::LVL_GameTriggerEffect(LVL_InterCard::LVL_InterCardType_E e
     }
 
         //男爵
-    case LVL_InterCard::baron: {
+    case LVL_InterCardType_E::baron: {
 
         //显示手牌
         if (qobject_cast<LVL_GameHuman*>(pstSelf) || qobject_cast<LVL_GameHuman*>(pstTarget)) {
@@ -163,7 +165,7 @@ void LVL_GameCtrller::LVL_GameTriggerEffect(LVL_InterCard::LVL_InterCardType_E e
         else if (pstSelf->pstOldCard->LVL_InterGetCardType() < pstTarget->pstOldCard->LVL_InterGetCardType()) pstSelf->LVL_GameKickPlayer();
 
         //隐藏手牌
-        if (NULL != pstShow && LVL_GamePlayer::Out != pstShow->LVL_GameGetPlayerState()) {
+        if (NULL != pstShow && LVL_GamePlayerState_E::Out != pstShow->LVL_GameGetPlayerState()) {
             QAbstractAnimation* pqaaSlipping = pstShow->pstOldCard->LVL_InterCreateFilppingAnimation(LVL_GAME_FLIPPING_MSEC);
             pqaaSlipping->start(QAbstractAnimation::DeleteWhenStopped);
             connect(pqaaSlipping, &QAbstractAnimation::finished, &qelLoop, &QEventLoop::quit);
@@ -172,35 +174,38 @@ void LVL_GameCtrller::LVL_GameTriggerEffect(LVL_InterCard::LVL_InterCardType_E e
         break;
     }
         //女仆
-    case LVL_InterCard::handmaid: pstSelf->LVL_GameGuardPlayer(); break;
+    case LVL_InterCardType_E::handmaid: pstSelf->LVL_GameGuardPlayer(); break;
 
         //王子
-    case LVL_InterCard::prince: {
+    case LVL_InterCardType_E::prince: {
 
         //显示动画
-        QParallelAnimationGroup* pqsagThrowing = new QParallelAnimationGroup(this);
         QPoint qpOrigin = pstTarget->pstOldCard->pos();
-        QPropertyAnimation *pqaaMoving = pstTarget->pstOldCard->LVL_InterCreateAnimation("pos", 1000, qpOrigin, qpOrigin + QPoint(0, 50));
-        pqaaMoving->setKeyValueAt(0.3, qpOrigin - QPoint(0, 30));
-        QAbstractAnimation *pqaaFading = pstTarget->pstOldCard->LVL_InterCreateAnimation("opacity", 1000, 1, 0, QEasingCurve::Linear);
-        pqsagThrowing->addAnimation(pqaaMoving);
-        pqsagThrowing->addAnimation(pqaaFading);
-        pqsagThrowing->start(QAbstractAnimation::DeleteWhenStopped);
-        connect(pqsagThrowing, &QAbstractAnimation::finished, &qelLoop, &QEventLoop::quit);
+        QParallelAnimationGroup* pqlagThrowing = new QParallelAnimationGroup(this);
+        QSequentialAnimationGroup* pqsagMoving = new QSequentialAnimationGroup(this);
+        pqsagMoving->addAnimation(pstTarget->pstOldCard->LVL_InterCreateAnimation("pos", LVL_GAME_THROWING_MSEC * 0.3, qpOrigin, qpOrigin - QPoint(0, 30), QEasingCurve::OutQuad));
+        pqsagMoving->addAnimation(pstTarget->pstOldCard->LVL_InterCreateAnimation("pos", LVL_GAME_THROWING_MSEC * 0.7, qpOrigin - QPoint(0, 30), qpOrigin + QPoint(0, 40), QEasingCurve::InQuad));
+        QPropertyAnimation *pqpaFading = pstTarget->pstOldCard->LVL_InterCreateAnimation("opacity", LVL_GAME_THROWING_MSEC, 1, 0);
+        pqlagThrowing->addAnimation(pqsagMoving);
+        pqlagThrowing->addAnimation(pqpaFading);
+        pqlagThrowing->start(QAbstractAnimation::DeleteWhenStopped);
+        connect(pqlagThrowing, &QAbstractAnimation::finished, &qelLoop, &QEventLoop::quit);
         qelLoop.exec();
 
         //恢复卡槽原属性
         pstTarget->pstOldCard->setProperty("pos", qpOrigin);
         pstTarget->pstOldCard->setProperty("opacity", 1);
 
-        if (LVL_InterCard::princess == pstTarget->pstOldCard->LVL_InterGetCardType()) pstTarget->LVL_GameKickPlayer();//判定丢弃的牌是否为公主
+        //丢弃卡牌
+        enType = pstTarget->pstOldCard->LVL_InterGetCardType();
         pstTarget->LVL_GameMakeDiscard(pstTarget->pstOldCard);
         pstDeckManager->LVL_GameMakeDeal(pstTarget, pstTarget->pstOldCard, true);
+        if (LVL_InterCardType_E::princess == enType) pstTarget->LVL_GameKickPlayer();//判定丢弃的牌是否为公主
         break;
     }
 
         //国王
-    case LVL_InterCard::king: {
+    case LVL_InterCardType_E::king: {
 
         //显示手牌
         if (qobject_cast<LVL_GameHuman*>(pstSelf) || qobject_cast<LVL_GameHuman*>(pstTarget)) {
@@ -214,7 +219,7 @@ void LVL_GameCtrller::LVL_GameTriggerEffect(LVL_InterCard::LVL_InterCardType_E e
         }
 
         //交换手牌
-        LVL_InterCard::LVL_InterCardType_E enTemp = pstSelf->pstOldCard->LVL_InterGetCardType();
+        LVL_InterCardType_E enTemp = pstSelf->pstOldCard->LVL_InterGetCardType();
         pstSelf->LVL_GameSetCard(pstSelf->pstOldCard, pstTarget->pstOldCard->LVL_InterGetCardType());
         pstTarget->LVL_GameSetCard(pstTarget->pstOldCard, enTemp);
 
@@ -238,10 +243,10 @@ void LVL_GameCtrller::LVL_GameTriggerEffect(LVL_InterCard::LVL_InterCardType_E e
     }
 
         //女伯爵
-    case LVL_InterCard::countess: break;
+    case LVL_InterCardType_E::countess: break;
 
         //公主
-    case LVL_InterCard::princess: pstSelf->LVL_GameKickPlayer(); break;
+    case LVL_InterCardType_E::princess: pstSelf->LVL_GameKickPlayer(); break;
     }
     bIsProcessing = false;
     emit sgnNoProcessing();
@@ -260,8 +265,8 @@ void LVL_GameCtrller::LVL_GameCalculatePoint() {
     //找到手牌分数最高的玩家
     for (int i = 0; i < sizeof(apstPlayers)/sizeof(apstPlayers[0]); i++) {
         apstPlayers[i]->pstOldCard->LVL_InterSetCardKnown(true);//展示玩家手牌
-        if (LVL_GamePlayer::Out == apstPlayers[i]->LVL_GameGetPlayerState()) continue;//出局者不参与判定
-        asHandPoint[i] = apstPlayers[i]->pstOldCard->LVL_InterGetCardType();//获得玩家手牌分数
+        if (LVL_GamePlayerState_E::Out == apstPlayers[i]->LVL_GameGetPlayerState()) continue;//出局者不参与判定
+        asHandPoint[i] = (int)apstPlayers[i]->pstOldCard->LVL_InterGetCardType();//获得玩家手牌分数
         asDiscardPoint[i] = apstPlayers[i]->sDiscardPilePoint;//获得玩家弃牌堆分数
         if (-1 == sWinner || asHandPoint[sWinner] < asHandPoint[i]) sWinner = i;
         else if (asHandPoint[sWinner] == asHandPoint[i] && asDiscardPoint[sWinner] < asDiscardPoint[i]) sWinner = i;
@@ -278,36 +283,31 @@ void LVL_GameCtrller::closeEvent(QCloseEvent *event) {
 
 ///////////////////////////////////////////////////////////////
 
-const LVL_InterCard::LVL_InterCardType_E LVL_GameDeckManager::m_aenCardSet[LVL_GAME_TOTAL_CARD_NUM] = //所有卡牌
-{ LVL_InterCard::guard, LVL_InterCard::guard, LVL_InterCard::guard, LVL_InterCard::guard, LVL_InterCard::guard,
-  LVL_InterCard::priest, LVL_InterCard::priest, LVL_InterCard::baron, LVL_InterCard::baron,
-  LVL_InterCard::handmaid, LVL_InterCard::handmaid, LVL_InterCard::prince, LVL_InterCard::prince,
-  LVL_InterCard::king, LVL_InterCard::countess, LVL_InterCard::princess };
+const QList<LVL_InterCardType_E> LVL_GameDeckManager::m_qlistCardSet = //所有卡牌
+{ LVL_InterCardType_E::guard, LVL_InterCardType_E::guard, LVL_InterCardType_E::guard, LVL_InterCardType_E::guard, LVL_InterCardType_E::guard,
+  LVL_InterCardType_E::priest, LVL_InterCardType_E::priest, LVL_InterCardType_E::baron, LVL_InterCardType_E::baron,
+  LVL_InterCardType_E::handmaid, LVL_InterCardType_E::handmaid, LVL_InterCardType_E::prince, LVL_InterCardType_E::prince,
+  LVL_InterCardType_E::king, LVL_InterCardType_E::countess, LVL_InterCardType_E::princess };
 
 /*
     功能：发牌器构造
     内容：洗牌，移除必要的牌，并在屏幕上显示剩余卡牌数
     参数：parent-父窗口的指针；sPlayerNum-玩家数量
 */
-LVL_GameDeckManager::LVL_GameDeckManager(QWidget *parent) : QWidget(parent), sCurCard(0) {
+LVL_GameDeckManager::LVL_GameDeckManager(QWidget *parent) : QWidget(parent)/*, sCurCard(0)*/ {
 
     //读取游戏设置
     const LVL_GameSetting &stSettings = LVL_GameSetting::LVL_SystemGetSettings();
     int sPlayerNum = stSettings.LVL_GameReadSetting<int>("Player Number");
 
     //洗牌
-    for (int i = 0; i < sizeof(m_aenCardSet) / sizeof(m_aenCardSet[0]); i++) aenDrawPile[i] = m_aenCardSet[i];
-    for (int i = 0; i < sizeof(m_aenCardSet) / sizeof(m_aenCardSet[0]); i++) {
-        int sPos = qrand() % (LVL_GAME_TOTAL_CARD_NUM - i);
-        LVL_InterCard::LVL_InterCardType_E enTemp = aenDrawPile[sPos];
-        aenDrawPile[sPos] = aenDrawPile[LVL_GAME_TOTAL_CARD_NUM - i - 1];
-        aenDrawPile[LVL_GAME_TOTAL_CARD_NUM - i - 1] = enTemp;
-    }
+    qlistDrawPile = m_qlistCardSet;
+    for (int i = 0; i < m_qlistCardSet.length(); i++) qlistDrawPile.swapItemsAt(qrand() % (LVL_GAME_TOTAL_CARD_NUM - i), LVL_GAME_TOTAL_CARD_NUM - i - 1);
 
     //取出并显示可见的牌
-    for (; sCurCard < LVL_GAME_SEEN_REMOVE_CARD_NUM; sCurCard++) {
-        LVL_InterCard *pstRemove = new LVL_InterCard(this, aenDrawPile[sCurCard], true,
-            LVL_GAME_REMOVECARD_POS + QPoint(sCurCard * LVL_GAME_REMOVECARD_WIDTH, 0), QSize(LVL_GAME_REMOVECARD_WIDTH, LVL_GAME_REMOVECARD_HEIGHT));
+    for (int i = 0; i < LVL_GAME_SEEN_REMOVE_CARD_NUM; i++) {
+        LVL_InterCard *pstRemove = new LVL_InterCard(this, qlistDrawPile.takeFirst(), true,
+            LVL_GAME_REMOVECARD_POS + QPoint(i * LVL_GAME_REMOVECARD_WIDTH, 0), QSize(LVL_GAME_REMOVECARD_WIDTH, LVL_GAME_REMOVECARD_HEIGHT));
         pstRemove->show();
     }
 
@@ -322,19 +322,22 @@ LVL_GameDeckManager::LVL_GameDeckManager(QWidget *parent) : QWidget(parent), sCu
 }
 
 /*
-    功能：发牌器发牌
+    功能：发牌
     参数：apstPlayers-获取牌的玩家指针；pstCard-要发的牌；bDealUnseen-是否允许发不可见的移除牌
     返回值：int-牌堆已发牌数；如果牌已发完，返回0
 */
 int LVL_GameDeckManager::LVL_GameMakeDeal(LVL_GamePlayer *pstPlayer, LVL_InterCard *pstCard, bool bDealUnseen){
     if (NULL == pstPlayer || NULL == pstCard) exit(-1);
-    if (false == bDealUnseen && sCurCard >= LVL_GAME_TOTAL_CARD_NUM - LVL_GAME_UNSEEN_REMOVE_CARD_NUM) return 0;//判断卡牌是否发完
+    if (false == bDealUnseen && qlistDrawPile.length () <= LVL_GAME_UNSEEN_REMOVE_CARD_NUM) return -1;//判断卡牌是否发完
 
-    pstPlayer->LVL_GameSetCard(pstCard, aenDrawPile[sCurCard++]);//发牌
+    pstPlayer->LVL_GameSetCard(pstCard, qlistDrawPile.takeFirst());//发牌
+
+    int sLeft = qlistDrawPile.length();
     pqlRest->setText(QString(QStringLiteral("剩余卡牌：%1(+%2)"))
-        .arg(LVL_GAME_TOTAL_CARD_NUM - LVL_GAME_UNSEEN_REMOVE_CARD_NUM - sCurCard > 0 ? LVL_GAME_TOTAL_CARD_NUM - LVL_GAME_UNSEEN_REMOVE_CARD_NUM - sCurCard : 0)
-        .arg((int)(sCurCard <= LVL_GAME_TOTAL_CARD_NUM - LVL_GAME_UNSEEN_REMOVE_CARD_NUM)));//更新剩余卡牌数
-    return sCurCard;
+        .arg(sLeft - LVL_GAME_UNSEEN_REMOVE_CARD_NUM > 0 ? sLeft - LVL_GAME_UNSEEN_REMOVE_CARD_NUM : 0)
+        .arg((sLeft > LVL_GAME_UNSEEN_REMOVE_CARD_NUM) ? LVL_GAME_UNSEEN_REMOVE_CARD_NUM : sLeft));//更新剩余卡牌数
+
+    return qlistDrawPile.length();
 }
 
 ///////////////////////////////////////////////////////////////
@@ -343,7 +346,7 @@ int LVL_GameDeckManager::LVL_GameMakeDeal(LVL_GamePlayer *pstPlayer, LVL_InterCa
     功能：绘制猜牌界面
     参数：parent-父窗口的指针；qpPos-猜牌页面的左上角坐标；{ width,height }-猜牌页面大小
 */
-LVL_GameGuesser::LVL_GameGuesser(QWidget *parent, const QPoint &qpPos, const QSize &qsSize) : QWidget(parent), enGuess(LVL_InterCard::none) {
+LVL_GameGuesser::LVL_GameGuesser(QWidget *parent, const QPoint &qpPos, const QSize &qsSize) : QWidget(parent), enGuess(LVL_InterCardType_E::none) {
     setGeometry(QRect(qpPos, qsSize));
 
     //设置背景图片
@@ -362,17 +365,17 @@ LVL_GameGuesser::LVL_GameGuesser(QWidget *parent, const QPoint &qpPos, const QSi
     pstConfirm->LVL_InterSetBtnPic(LVL_PIC_CONFIRM_BTN, LVL_PIC_CONFIRM_BTN + LVL_PIC_FOCUSED, LVL_PIC_CONFIRM_BTN + LVL_PIC_CLICKED);
     pstConfirm->setFixedSize(LVL_GAME_GUESSER_CONFIRM_SIZE);
     pstConfirm->hide();
-    connect(pstConfirm, &QPushButton::clicked, [this] { if (LVL_InterCard::none != enGuess) emit sgnGuessFinished(enGuess); });
-    pqloGuesserUI->addWidget(pstConfirm, (LVL_InterCard::CardTypeNum - 2) / LVL_GAME_GUESSER_COLUMN, (LVL_InterCard::CardTypeNum - 2) % LVL_GAME_GUESSER_COLUMN);
+    connect(pstConfirm, &QPushButton::clicked, [this] { if (LVL_InterCardType_E::none != enGuess) emit sgnGuessFinished(enGuess); });
+    pqloGuesserUI->addWidget(pstConfirm, ((int)LVL_InterCardType_E::CardTypeNum - 2) / LVL_GAME_GUESSER_COLUMN, ((int)LVL_InterCardType_E::CardTypeNum - 2) % LVL_GAME_GUESSER_COLUMN);
 
     //绘制所有选项
-    LVL_InterBtn *apstChoice[LVL_InterCard::CardTypeNum - 2];
+    LVL_InterBtn *apstChoice[(int)LVL_InterCardType_E::CardTypeNum - 2];
     for (int i = 0; i < sizeof(apstChoice)/sizeof(apstChoice[0]); i++) {
-        apstChoice[i] = new LVL_InterBtn(LVL_InterCard(this, (LVL_InterCard::LVL_InterCardType_E)(i + 2)));
+        apstChoice[i] = new LVL_InterBtn(LVL_InterCard(this, (LVL_InterCardType_E)(i + 2)));
         apstChoice[i]->setFixedSize(apstChoice[i]->width(), apstChoice[i]->height());
         apstChoice[i]->setCheckable(true);
         apstChoice[i]->setAutoExclusive(true);
-        connect(apstChoice[i], &QPushButton::toggled, [=]() { enGuess = (LVL_InterCard::LVL_InterCardType_E)(i + 2); pstConfirm->show(); });
+        connect(apstChoice[i], &QPushButton::toggled, [=]() { enGuess = (LVL_InterCardType_E)(i + 2); pstConfirm->show(); });
         pqloGuesserUI->addWidget(apstChoice[i], i / LVL_GAME_GUESSER_COLUMN, i % LVL_GAME_GUESSER_COLUMN);
     }
 }

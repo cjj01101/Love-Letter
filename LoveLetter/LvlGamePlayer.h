@@ -20,12 +20,13 @@ class LVL_GameCtrller;
 //                       玩家基类                         //
 ////////////////////////////////////////////////////////////
 
+enum class LVL_GamePlayerState_E { Normal, Guarded, Out };//所有玩家状态
+
 class LVL_GamePlayer : public QWidget {
     Q_OBJECT
 
 public:
     enum { HandCardNum = 2 };
-    enum LVL_GamePlayerState_E { Normal, Guarded, Out };//所有玩家状态
 
     LVL_GamePlayer(LVL_GameCtrller *parent = Q_NULLPTR, bool bKnown = true, const QPoint &qpSlot = { 0, 0 }, const QPoint &qpDiscard = { 0, 0 },
         const QSize &qsCardSize = { LVL_INTER_CARD_WIDTH, LVL_INTER_CARD_HEIGHT }, int sCardSpace = LVL_INTER_CARD_SPACE);//构造函数
@@ -34,15 +35,16 @@ public:
     inline void LVL_GameSetPortraitPic(const QString &qstrDefaultPic, const QString &qstrHoverPic, const QString &qstrPressedPic);//设置玩家头图
     inline void LVL_GameSetDefaultPortraitPic();//将玩家头图设置为默认头图
     inline LVL_GamePlayerState_E LVL_GameGetPlayerState() const;//获取玩家当前状态
-    inline void LVL_GameKickPlayer();//使玩家出局
+    void LVL_GameKickPlayer();//使玩家出局
     inline void LVL_GameGuardPlayer();//保护玩家
     inline void LVL_GameUnguardPlayer();//解除保护
-    inline void LVL_GameSetCard(LVL_InterCard *pstCard, const LVL_InterCard::LVL_InterCardType_E &enType);//设置卡组中某张卡牌种类
+    inline void LVL_GameSetCard(LVL_InterCard *pstCard, const LVL_InterCardType_E &enType);//设置卡组中某张卡牌种类
     void LVL_GameMakeDiscard(LVL_InterCard *pstCard);//弃置手牌
     void LVL_GamePlayCard();//打出一张卡牌
 
 protected:
     static int sActivePlayerNum;//在场玩家数量
+    LVL_GameCtrller *pstCtrller;//游戏控制器
 
     LVL_GamePlayerState_E enState;//玩家状态
     LVL_InterBtn *pstPortrait;//玩家头像
@@ -57,12 +59,12 @@ protected:
     LVL_GamePlayer *pstTarget;//选择卡牌效果作用目标
 
 signals:
-    void sgnRoundStarted();//信号函数，表明回合开始
-    void sgnRoundEnded();//信号函数，表明回合结束
-    void sgnPortraitClicked();//信号函数，表明头像被点击
-    void sgnWantDeal(LVL_InterCard*);//信号函数，需要发牌
-    void sgnTarget(LVL_GamePlayer*);//信号函数，表明选择效果目标
-    void sgnUntarget(LVL_GamePlayer*);//信号函数，表明取消选择效果目标
+    void sgnRoundStarted();//表明回合开始
+    void sgnRoundEnded();//表明回合结束
+    void sgnWantDeal(LVL_InterCard*);//表明需要发牌
+    void sgnPortraitClicked();//表明头像被点击
+    void sgnTarget(LVL_GamePlayer*);//表明选择效果目标
+    void sgnUntarget(LVL_GamePlayer*);//表明取消选择效果目标
 
 public slots:
     void LVL_GameStartRound();//回合开始
@@ -108,19 +110,7 @@ inline void LVL_GamePlayer::LVL_GameSetDefaultPortraitPic() {
      参数：无
      返回值：LVL_GamePlayerState_E-Normal为正常在场，Guarded为被保护；Out为出局
  */
-inline LVL_GamePlayer::LVL_GamePlayerState_E LVL_GamePlayer::LVL_GameGetPlayerState() const { return enState; }
-
-/*
-     功能：使玩家出局
-     参数：无
-     返回值：无
-*/
-inline void LVL_GamePlayer::LVL_GameKickPlayer() {
-    pstPortrait->LVL_InterSetBtnPic(qstrPortraitName + LVL_PIC_OUT, qstrPortraitName + LVL_PIC_OUT, qstrPortraitName + LVL_PIC_OUT);//更改头图
-    enState = Out;//设置状态为出局
-    pstOldCard->LVL_InterSetCardKnown(true);//展示手牌
-    sActivePlayerNum--;//在场玩家数减一
-}
+inline LVL_GamePlayerState_E LVL_GamePlayer::LVL_GameGetPlayerState() const { return enState; }
 
 /*
      功能：保护玩家
@@ -129,7 +119,7 @@ inline void LVL_GamePlayer::LVL_GameKickPlayer() {
 */
 inline void LVL_GamePlayer::LVL_GameGuardPlayer() {
     pstPortrait->LVL_InterSetBtnPic(qstrPortraitName + LVL_PIC_GUARDED, qstrPortraitName + LVL_PIC_GUARDED, qstrPortraitName + LVL_PIC_GUARDED);//更改头图
-    enState = Guarded;//设置状态为被保护
+    enState = LVL_GamePlayerState_E::Guarded;//设置状态为被保护
 }
 
 /*
@@ -139,7 +129,7 @@ inline void LVL_GamePlayer::LVL_GameGuardPlayer() {
 */
 inline void LVL_GamePlayer::LVL_GameUnguardPlayer() {
     LVL_GameSetDefaultPortraitPic();//将头图更改为默认
-    enState = Normal;//解除保护状态
+    enState = LVL_GamePlayerState_E::Normal;//解除保护状态
 }
 
 /*
@@ -147,7 +137,7 @@ inline void LVL_GamePlayer::LVL_GameUnguardPlayer() {
      参数：pstCard-需要设置的卡牌的指针；enType-需要设置的种类；若pstCard为NULL，则什么也不做
      返回值：无
 */
-inline void LVL_GamePlayer::LVL_GameSetCard(LVL_InterCard *pstCard, const LVL_InterCard::LVL_InterCardType_E &enType) {
+inline void LVL_GamePlayer::LVL_GameSetCard(LVL_InterCard *pstCard, const LVL_InterCardType_E &enType) {
     if (NULL == pstCard) exit(-1);
     pstCard->LVL_InterSetCardType(enType);
 }

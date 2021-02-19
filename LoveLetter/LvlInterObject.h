@@ -46,6 +46,8 @@
 //                       卡牌类型                         //
 ////////////////////////////////////////////////////////////
 
+enum class LVL_InterCardType_E { none = 0, guard, priest, baron, handmaid, prince, king, countess, princess, CardTypeNum };//所有卡牌种类
+
 class LVL_InterCard : public QLabel
 {
     Q_OBJECT
@@ -53,12 +55,11 @@ class LVL_InterCard : public QLabel
     Q_PROPERTY(qreal opacity READ LVL_InterGetCardOpacity WRITE LVL_InterSetCardOpacity)
 
 public:
-    enum LVL_InterCardType_E { none = 0, guard, priest, baron, handmaid, prince, king, countess, princess, CardTypeNum };//所有卡牌种类
-    const static QString m_aqstrCardNames[CardTypeNum];//所有卡牌名称
-    const static QString m_aqstrCardHints[CardTypeNum];//卡牌提示
-    const static bool m_abNeedTarget[CardTypeNum];//每张卡牌技能是否需要指定目标
+    const static QString m_aqstrCardNames[(int)LVL_InterCardType_E::CardTypeNum];//所有卡牌名称
+    const static QString m_aqstrCardHints[(int)LVL_InterCardType_E::CardTypeNum];//卡牌提示
+    const static bool m_abNeedTarget[(int)LVL_InterCardType_E::CardTypeNum];//每张卡牌技能是否需要指定目标
 
-    LVL_InterCard(QWidget *parent = Q_NULLPTR, LVL_InterCardType_E enType = none, bool bKnown = true,
+    LVL_InterCard(QWidget *parent = Q_NULLPTR, LVL_InterCardType_E enType = LVL_InterCardType_E::none, bool bKnown = true,
         const QPoint &qpPos = { 0, 0 }, const QSize &qsSize = { LVL_INTER_CARD_WIDTH, LVL_INTER_CARD_HEIGHT });
 
     inline void LVL_InterSetCardPos(const QPoint &qpPos);
@@ -106,7 +107,7 @@ inline void LVL_InterCard::LVL_InterSetCardPos(int x, int y) { move(x, y); }
     参数：无
     返回值：LVL_InterCardType_E-卡牌种类
 */
-inline LVL_InterCard::LVL_InterCardType_E LVL_InterCard::LVL_InterGetCardType() const { return enType; }
+inline LVL_InterCardType_E LVL_InterCard::LVL_InterGetCardType() const { return enType; }
 
 /*
     功能：获取卡牌可见性
